@@ -39,13 +39,14 @@ def log_result(
     expected_status
 ):
     """
-    Mostra o resultado do teste no terminal.
+    Mostra o resultado do teste no terminal
+    e grava no arquivo integration.log.
     """
 
     result = "PASS" if status == expected_status else "FAIL"
 
     print("=" * 70)
-    print(f"PROTOCOLO : REST")
+    print("PROTOCOLO : REST")
     print(f"OPERAÇÃO  : {operation}")
     print(f"MÉTODO    : {method}")
     print(f"TARGET    : {url}")
@@ -56,10 +57,48 @@ def log_result(
     print(f"RESULTADO : {result}")
     print("=" * 70)
 
+    log_path = os.path.join(
+        os.path.dirname(
+            os.path.dirname(
+                os.path.abspath(__file__)
+            )
+        ),
+        "logs",
+        "integration.log"
+    )
+
+    timestamp = time.strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    with open(
+        log_path,
+        "a",
+        encoding="utf-8"
+    ) as f:
+
+        f.write(
+            f"{timestamp} | "
+            f"protocol=REST | "
+            f"operation={operation} | "
+            f"method={method} | "
+            f"target={url} | "
+            f"request_id={request_id} | "
+            f"status={status} | "
+            f"duration_ms={duration_ms:.2f} | "
+            f"result={result}\n"
+        )
+
     return result
 
 
-def make_request(method, endpoint, operation, expected_status, json_data=None):
+def make_request(
+    method,
+    endpoint,
+    operation,
+    expected_status,
+    json_data=None
+):
     """
     Executa uma requisição REST com os headers obrigatórios.
     """
@@ -134,13 +173,46 @@ def test_r1():
     unitPriceCents = 25990
     """
 
-    return make_request(
-        method="GET",
-        endpoint="/api/v1/products/KB-100",
-        operation="R1 - Buscar KB-100",
-        expected_status=200
-    )
+    url = f"{REST_BASE_URL}/api/v1/products/KB-100"
+    request_id = generate_request_id()
 
+    headers = {
+        "X-Client-Team": CLIENT_TEAM,
+        "X-Request-ID": request_id,
+        "Content-Type": "application/json"
+    }
+
+    start = time.perf_counter()
+
+    try:
+        response = requests.get(
+            url=url,
+            headers=headers,
+            timeout=10
+        )
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        response_data = response.json()
+
+        status_ok = response.status_code == 200
+        price_ok = response_data.get("unitPriceCents") == 25990
+
+        result = "PASS" if status_ok and price_ok else "FAIL"
+
+        print("=" * 70)
+        print("PROTOCOLO : REST")
+        print("OPERAÇÃO  : R1 - Buscar KB-100")
+        print(f"STATUS    : {response.status_code}")
+        print(f"RESPOSTA  : {response_data}")
+        print(f"PREÇO OK  : {price_ok}")
+        print(f"RESULTADO : {result}")
+        print("=" * 70)
+
+        return result
+
+    except requests.RequestException as error:
+        print(f"Erro no R1: {error}")
+        return "FAIL"
 
 def test_r2():
     """
@@ -152,13 +224,46 @@ def test_r2():
     code = PRODUCT_NOT_FOUND
     """
 
-    return make_request(
-        method="GET",
-        endpoint="/api/v1/products/XX-999",
-        operation="R2 - Produto inexistente",
-        expected_status=404
-    )
+    url = f"{REST_BASE_URL}/api/v1/products/XX-999"
+    request_id = generate_request_id()
 
+    headers = {
+        "X-Client-Team": CLIENT_TEAM,
+        "X-Request-ID": request_id,
+        "Content-Type": "application/json"
+    }
+
+    start = time.perf_counter()
+
+    try:
+        response = requests.get(
+            url=url,
+            headers=headers,
+            timeout=10
+        )
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        response_data = response.json()
+
+        status_ok = response.status_code == 404
+        code_ok = response_data.get("code") == "PRODUCT_NOT_FOUND"
+
+        result = "PASS" if status_ok and code_ok else "FAIL"
+
+        print("=" * 70)
+        print("PROTOCOLO : REST")
+        print("OPERAÇÃO  : R2 - Produto inexistente")
+        print(f"STATUS    : {response.status_code}")
+        print(f"RESPOSTA  : {response_data}")
+        print(f"CODE OK   : {code_ok}")
+        print(f"RESULTADO : {result}")
+        print("=" * 70)
+
+        return result
+
+    except requests.RequestException as error:
+        print(f"Erro no R2: {error}")
+        return "FAIL"
 
 def test_r3():
     """
@@ -167,9 +272,9 @@ def test_r3():
     1x MS-200
 
     Esperado:
-    subtotal = 64970
-    discount = 5%
-    total = 61722
+    subtotalCents = 64970
+    discountCents = 3248
+    totalCents = 61722
     """
 
     data = {
@@ -185,25 +290,68 @@ def test_r3():
         ]
     }
 
-    return make_request(
-        method="POST",
-        endpoint="/api/v1/quotes",
-        operation="R3 - Cotação KB-100 + MS-200",
-        expected_status=200,
-        json_data=data
-    )
+    url = f"{REST_BASE_URL}/api/v1/quotes"
+    request_id = generate_request_id()
 
+    headers = {
+        "X-Client-Team": CLIENT_TEAM,
+        "X-Request-ID": request_id,
+        "Content-Type": "application/json"
+    }
 
+    start = time.perf_counter()
+
+    try:
+        response = requests.post(
+            url=url,
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        response_data = response.json()
+
+        status_ok = response.status_code == 200
+        subtotal_ok = response_data.get("subtotalCents") == 64970
+        discount_ok = response_data.get("discountCents") == 3248
+        total_ok = response_data.get("totalCents") == 61722
+
+        result = (
+            "PASS"
+            if status_ok
+            and subtotal_ok
+            and discount_ok
+            and total_ok
+            else "FAIL"
+        )
+
+        print("=" * 70)
+        print("PROTOCOLO : REST")
+        print("OPERAÇÃO  : R3 - Cotação KB-100 + MS-200")
+        print(f"STATUS    : {response.status_code}")
+        print(f"RESPOSTA  : {response_data}")
+        print(f"SUBTOTAL OK : {subtotal_ok}")
+        print(f"DESCONTO OK : {discount_ok}")
+        print(f"TOTAL OK    : {total_ok}")
+        print(f"RESULTADO   : {result}")
+        print("=" * 70)
+
+        return result
+
+    except requests.RequestException as error:
+        print(f"Erro no R3: {error}")
+        return "FAIL"
 def test_r4():
     """
     R4:
     1x MN-400
 
     Esperado:
-    subtotal = 119990
-    discount = 10%
+    HTTP 200
+    subtotalCents = 119990
     discountCents = 11999
-    total = 107991
+    totalCents = 107991
     """
 
     data = {
@@ -215,14 +363,58 @@ def test_r4():
         ]
     }
 
-    return make_request(
-        method="POST",
-        endpoint="/api/v1/quotes",
-        operation="R4 - Cotação MN-400",
-        expected_status=200,
-        json_data=data
-    )
+    url = f"{REST_BASE_URL}/api/v1/quotes"
+    request_id = generate_request_id()
 
+    headers = {
+        "X-Client-Team": CLIENT_TEAM,
+        "X-Request-ID": request_id,
+        "Content-Type": "application/json"
+    }
+
+    start = time.perf_counter()
+
+    try:
+        response = requests.post(
+            url=url,
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        response_data = response.json()
+
+        status_ok = response.status_code == 200
+        subtotal_ok = response_data.get("subtotalCents") == 119990
+        discount_ok = response_data.get("discountCents") == 11999
+        total_ok = response_data.get("totalCents") == 107991
+
+        result = (
+            "PASS"
+            if status_ok
+            and subtotal_ok
+            and discount_ok
+            and total_ok
+            else "FAIL"
+        )
+
+        print("=" * 70)
+        print("PROTOCOLO : REST")
+        print("OPERAÇÃO  : R4 - Cotação MN-400")
+        print(f"STATUS    : {response.status_code}")
+        print(f"RESPOSTA  : {response_data}")
+        print(f"SUBTOTAL OK : {subtotal_ok}")
+        print(f"DESCONTO OK : {discount_ok}")
+        print(f"TOTAL OK    : {total_ok}")
+        print(f"RESULTADO   : {result}")
+        print("=" * 70)
+
+        return result
+
+    except requests.RequestException as error:
+        print(f"Erro no R4: {error}")
+        return "FAIL"
 
 def test_r5():
     """
@@ -243,15 +435,47 @@ def test_r5():
         ]
     }
 
-    return make_request(
-        method="POST",
-        endpoint="/api/v1/quotes",
-        operation="R5 - SKU inválido",
-        expected_status=422,
-        json_data=data
-    )
+    url = f"{REST_BASE_URL}/api/v1/quotes"
+    request_id = generate_request_id()
 
+    headers = {
+        "X-Client-Team": CLIENT_TEAM,
+        "X-Request-ID": request_id,
+        "Content-Type": "application/json"
+    }
 
+    start = time.perf_counter()
+
+    try:
+        response = requests.post(
+            url=url,
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        response_data = response.json()
+
+        status_ok = response.status_code == 422
+        code_ok = response_data.get("code") == "INVALID_PRODUCT"
+
+        result = "PASS" if status_ok and code_ok else "FAIL"
+
+        print("=" * 70)
+        print("PROTOCOLO : REST")
+        print("OPERAÇÃO  : R5 - SKU inválido")
+        print(f"STATUS    : {response.status_code}")
+        print(f"RESPOSTA  : {response_data}")
+        print(f"CODE OK   : {code_ok}")
+        print(f"RESULTADO : {result}")
+        print("=" * 70)
+
+        return result
+
+    except requests.RequestException as error:
+        print(f"Erro no R5: {error}")
+        return "FAIL"
 # ============================================================
 # EXECUÇÃO
 # ============================================================
