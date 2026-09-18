@@ -28,7 +28,7 @@ def generate_request_id():
     return str(uuid.uuid4())
 
 
-def log_result(
+def write_log(
     operation,
     method,
     url,
@@ -36,26 +36,9 @@ def log_result(
     status,
     response_data,
     duration_ms,
-    expected_status
+    result
 ):
-    """
-    Mostra o resultado do teste no terminal
-    e grava no arquivo integration.log.
-    """
-
-    result = "PASS" if status == expected_status else "FAIL"
-
-    print("=" * 70)
-    print("PROTOCOLO : REST")
-    print(f"OPERAÇÃO  : {operation}")
-    print(f"MÉTODO    : {method}")
-    print(f"TARGET    : {url}")
-    print(f"REQUEST ID: {request_id}")
-    print(f"STATUS    : {status}")
-    print(f"RESPOSTA  : {response_data}")
-    print(f"DURAÇÃO   : {duration_ms:.2f} ms")
-    print(f"RESULTADO : {result}")
-    print("=" * 70)
+    """Grava o resultado da requisição no integration.log."""
 
     log_path = os.path.join(
         os.path.dirname(
@@ -67,9 +50,7 @@ def log_result(
         "integration.log"
     )
 
-    timestamp = time.strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
 
     with open(
         log_path,
@@ -85,82 +66,50 @@ def log_result(
             f"target={url} | "
             f"request_id={request_id} | "
             f"status={status} | "
+            f"response={response_data} | "
             f"duration_ms={duration_ms:.2f} | "
             f"result={result}\n"
         )
 
-    return result
 
-
-def make_request(
-    method,
-    endpoint,
+def print_result(
     operation,
-    expected_status,
-    json_data=None
+    method,
+    url,
+    request_id,
+    status,
+    response_data,
+    duration_ms,
+    result
 ):
-    """
-    Executa uma requisição REST com os headers obrigatórios.
-    """
+    """Mostra o resultado no terminal."""
 
-    url = f"{REST_BASE_URL}{endpoint}"
+    print("=" * 70)
+    print("PROTOCOLO : REST")
+    print(f"OPERAÇÃO  : {operation}")
+    print(f"MÉTODO    : {method}")
+    print(f"TARGET    : {url}")
+    print(f"REQUEST ID: {request_id}")
+    print(f"STATUS    : {status}")
+    print(f"RESPOSTA  : {response_data}")
+    print(f"DURAÇÃO   : {duration_ms:.2f} ms")
+    print(f"RESULTADO : {result}")
+    print("=" * 70)
 
-    request_id = generate_request_id()
-
-    headers = {
-        "X-Client-Team": CLIENT_TEAM,
-        "X-Request-ID": request_id,
-        "Content-Type": "application/json"
-    }
-
-    start = time.perf_counter()
-
-    try:
-        response = requests.request(
-            method=method,
-            url=url,
-            headers=headers,
-            json=json_data,
-            timeout=10
-        )
-
-        duration_ms = (time.perf_counter() - start) * 1000
-
-        try:
-            response_data = response.json()
-        except ValueError:
-            response_data = response.text
-
-        return log_result(
-            operation=operation,
-            method=method,
-            url=url,
-            request_id=request_id,
-            status=response.status_code,
-            response_data=response_data,
-            duration_ms=duration_ms,
-            expected_status=expected_status
-        )
-
-    except requests.RequestException as error:
-
-        duration_ms = (time.perf_counter() - start) * 1000
-
-        print("=" * 70)
-        print("PROTOCOLO : REST")
-        print(f"OPERAÇÃO  : {operation}")
-        print(f"TARGET    : {url}")
-        print(f"REQUEST ID: {request_id}")
-        print(f"ERRO      : {error}")
-        print(f"DURAÇÃO   : {duration_ms:.2f} ms")
-        print("RESULTADO : FAIL")
-        print("=" * 70)
-
-        return "FAIL"
+    write_log(
+        operation=operation,
+        method=method,
+        url=url,
+        request_id=request_id,
+        status=status,
+        response_data=response_data,
+        duration_ms=duration_ms,
+        result=result
+    )
 
 
 # ============================================================
-# TESTES R1–R5
+# TESTE R1
 # ============================================================
 
 def test_r1():
@@ -173,6 +122,7 @@ def test_r1():
     unitPriceCents = 25990
     """
 
+    operation = "R1 - Buscar KB-100"
     url = f"{REST_BASE_URL}/api/v1/products/KB-100"
     request_id = generate_request_id()
 
@@ -192,27 +142,55 @@ def test_r1():
         )
 
         duration_ms = (time.perf_counter() - start) * 1000
-        response_data = response.json()
+
+        try:
+            response_data = response.json()
+        except ValueError:
+            response_data = response.text
 
         status_ok = response.status_code == 200
-        price_ok = response_data.get("unitPriceCents") == 25990
+        price_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("unitPriceCents") == 25990
+        )
 
         result = "PASS" if status_ok and price_ok else "FAIL"
 
-        print("=" * 70)
-        print("PROTOCOLO : REST")
-        print("OPERAÇÃO  : R1 - Buscar KB-100")
-        print(f"STATUS    : {response.status_code}")
-        print(f"RESPOSTA  : {response_data}")
-        print(f"PREÇO OK  : {price_ok}")
-        print(f"RESULTADO : {result}")
-        print("=" * 70)
+        print_result(
+            operation,
+            "GET",
+            url,
+            request_id,
+            response.status_code,
+            response_data,
+            duration_ms,
+            result
+        )
 
         return result
 
     except requests.RequestException as error:
-        print(f"Erro no R1: {error}")
-        return "FAIL"
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        result = "FAIL"
+
+        print_result(
+            operation,
+            "GET",
+            url,
+            request_id,
+            "REQUEST_ERROR",
+            str(error),
+            duration_ms,
+            result
+        )
+
+        return result
+
+
+# ============================================================
+# TESTE R2
+# ============================================================
 
 def test_r2():
     """
@@ -224,6 +202,7 @@ def test_r2():
     code = PRODUCT_NOT_FOUND
     """
 
+    operation = "R2 - Produto inexistente"
     url = f"{REST_BASE_URL}/api/v1/products/XX-999"
     request_id = generate_request_id()
 
@@ -243,27 +222,55 @@ def test_r2():
         )
 
         duration_ms = (time.perf_counter() - start) * 1000
-        response_data = response.json()
+
+        try:
+            response_data = response.json()
+        except ValueError:
+            response_data = response.text
 
         status_ok = response.status_code == 404
-        code_ok = response_data.get("code") == "PRODUCT_NOT_FOUND"
+        code_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("code") == "PRODUCT_NOT_FOUND"
+        )
 
         result = "PASS" if status_ok and code_ok else "FAIL"
 
-        print("=" * 70)
-        print("PROTOCOLO : REST")
-        print("OPERAÇÃO  : R2 - Produto inexistente")
-        print(f"STATUS    : {response.status_code}")
-        print(f"RESPOSTA  : {response_data}")
-        print(f"CODE OK   : {code_ok}")
-        print(f"RESULTADO : {result}")
-        print("=" * 70)
+        print_result(
+            operation,
+            "GET",
+            url,
+            request_id,
+            response.status_code,
+            response_data,
+            duration_ms,
+            result
+        )
 
         return result
 
     except requests.RequestException as error:
-        print(f"Erro no R2: {error}")
-        return "FAIL"
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        result = "FAIL"
+
+        print_result(
+            operation,
+            "GET",
+            url,
+            request_id,
+            "REQUEST_ERROR",
+            str(error),
+            duration_ms,
+            result
+        )
+
+        return result
+
+
+# ============================================================
+# TESTE R3
+# ============================================================
 
 def test_r3():
     """
@@ -272,10 +279,13 @@ def test_r3():
     1x MS-200
 
     Esperado:
+    HTTP 200
     subtotalCents = 64970
     discountCents = 3248
     totalCents = 61722
     """
+
+    operation = "R3 - Cotação KB-100 + MS-200"
 
     data = {
         "items": [
@@ -310,12 +320,28 @@ def test_r3():
         )
 
         duration_ms = (time.perf_counter() - start) * 1000
-        response_data = response.json()
+
+        try:
+            response_data = response.json()
+        except ValueError:
+            response_data = response.text
 
         status_ok = response.status_code == 200
-        subtotal_ok = response_data.get("subtotalCents") == 64970
-        discount_ok = response_data.get("discountCents") == 3248
-        total_ok = response_data.get("totalCents") == 61722
+
+        subtotal_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("subtotalCents") == 64970
+        )
+
+        discount_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("discountCents") == 3248
+        )
+
+        total_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("totalCents") == 61722
+        )
 
         result = (
             "PASS"
@@ -326,22 +352,42 @@ def test_r3():
             else "FAIL"
         )
 
-        print("=" * 70)
-        print("PROTOCOLO : REST")
-        print("OPERAÇÃO  : R3 - Cotação KB-100 + MS-200")
-        print(f"STATUS    : {response.status_code}")
-        print(f"RESPOSTA  : {response_data}")
-        print(f"SUBTOTAL OK : {subtotal_ok}")
-        print(f"DESCONTO OK : {discount_ok}")
-        print(f"TOTAL OK    : {total_ok}")
-        print(f"RESULTADO   : {result}")
-        print("=" * 70)
+        print_result(
+            operation,
+            "POST",
+            url,
+            request_id,
+            response.status_code,
+            response_data,
+            duration_ms,
+            result
+        )
 
         return result
 
     except requests.RequestException as error:
-        print(f"Erro no R3: {error}")
-        return "FAIL"
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        result = "FAIL"
+
+        print_result(
+            operation,
+            "POST",
+            url,
+            request_id,
+            "REQUEST_ERROR",
+            str(error),
+            duration_ms,
+            result
+        )
+
+        return result
+
+
+# ============================================================
+# TESTE R4
+# ============================================================
+
 def test_r4():
     """
     R4:
@@ -353,6 +399,8 @@ def test_r4():
     discountCents = 11999
     totalCents = 107991
     """
+
+    operation = "R4 - Cotação MN-400"
 
     data = {
         "items": [
@@ -383,12 +431,28 @@ def test_r4():
         )
 
         duration_ms = (time.perf_counter() - start) * 1000
-        response_data = response.json()
+
+        try:
+            response_data = response.json()
+        except ValueError:
+            response_data = response.text
 
         status_ok = response.status_code == 200
-        subtotal_ok = response_data.get("subtotalCents") == 119990
-        discount_ok = response_data.get("discountCents") == 11999
-        total_ok = response_data.get("totalCents") == 107991
+
+        subtotal_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("subtotalCents") == 119990
+        )
+
+        discount_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("discountCents") == 11999
+        )
+
+        total_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("totalCents") == 107991
+        )
 
         result = (
             "PASS"
@@ -399,22 +463,41 @@ def test_r4():
             else "FAIL"
         )
 
-        print("=" * 70)
-        print("PROTOCOLO : REST")
-        print("OPERAÇÃO  : R4 - Cotação MN-400")
-        print(f"STATUS    : {response.status_code}")
-        print(f"RESPOSTA  : {response_data}")
-        print(f"SUBTOTAL OK : {subtotal_ok}")
-        print(f"DESCONTO OK : {discount_ok}")
-        print(f"TOTAL OK    : {total_ok}")
-        print(f"RESULTADO   : {result}")
-        print("=" * 70)
+        print_result(
+            operation,
+            "POST",
+            url,
+            request_id,
+            response.status_code,
+            response_data,
+            duration_ms,
+            result
+        )
 
         return result
 
     except requests.RequestException as error:
-        print(f"Erro no R4: {error}")
-        return "FAIL"
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        result = "FAIL"
+
+        print_result(
+            operation,
+            "POST",
+            url,
+            request_id,
+            "REQUEST_ERROR",
+            str(error),
+            duration_ms,
+            result
+        )
+
+        return result
+
+
+# ============================================================
+# TESTE R5
+# ============================================================
 
 def test_r5():
     """
@@ -425,6 +508,8 @@ def test_r5():
     HTTP 422
     code = INVALID_PRODUCT
     """
+
+    operation = "R5 - SKU inválido"
 
     data = {
         "items": [
@@ -455,27 +540,53 @@ def test_r5():
         )
 
         duration_ms = (time.perf_counter() - start) * 1000
-        response_data = response.json()
+
+        try:
+            response_data = response.json()
+        except ValueError:
+            response_data = response.text
 
         status_ok = response.status_code == 422
-        code_ok = response_data.get("code") == "INVALID_PRODUCT"
+
+        code_ok = (
+            isinstance(response_data, dict)
+            and response_data.get("code") == "INVALID_PRODUCT"
+        )
 
         result = "PASS" if status_ok and code_ok else "FAIL"
 
-        print("=" * 70)
-        print("PROTOCOLO : REST")
-        print("OPERAÇÃO  : R5 - SKU inválido")
-        print(f"STATUS    : {response.status_code}")
-        print(f"RESPOSTA  : {response_data}")
-        print(f"CODE OK   : {code_ok}")
-        print(f"RESULTADO : {result}")
-        print("=" * 70)
+        print_result(
+            operation,
+            "POST",
+            url,
+            request_id,
+            response.status_code,
+            response_data,
+            duration_ms,
+            result
+        )
 
         return result
 
     except requests.RequestException as error:
-        print(f"Erro no R5: {error}")
-        return "FAIL"
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        result = "FAIL"
+
+        print_result(
+            operation,
+            "POST",
+            url,
+            request_id,
+            "REQUEST_ERROR",
+            str(error),
+            duration_ms,
+            result
+        )
+
+        return result
+
+
 # ============================================================
 # EXECUÇÃO
 # ============================================================
